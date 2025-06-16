@@ -12,7 +12,7 @@ const config = {
         }
     },
     production: {
-        httpPort: process.env.PORT || 80,
+        httpPort: process.env.PORT || 3000,
         httpsPort: process.env.HTTPS_PORT || 443,
         corsOrigin: process.env.CORS_ORIGIN || '*',
         socketPath: '/socket.io/',

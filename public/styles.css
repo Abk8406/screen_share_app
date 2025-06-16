@@ -1,28 +1,213 @@
-.message {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 20px;
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f2f5;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+h1 {
+    color: #1a73e8;
+    margin-bottom: 20px;
+}
+
+.status-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.status {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.status.connected {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.status.disconnected {
+    background-color: #fce8e6;
+    color: #c5221f;
+}
+
+.status.in-room {
+    background-color: #e8f0fe;
+    color: #1a73e8;
+}
+
+.status.not-in-room {
+    background-color: #f1f3f4;
+    color: #5f6368;
+}
+
+.room-section {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.room-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+#roomInput {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #dadce0;
     border-radius: 4px;
+    font-size: 16px;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#joinRoomBtn {
+    background-color: #1a73e8;
     color: white;
-    font-weight: bold;
-    z-index: 1000;
-    display: none;
 }
 
-.message.success {
-    background-color: #4CAF50;
+#joinRoomBtn:hover {
+    background-color: #1557b0;
 }
 
-.message.error {
-    background-color: #f44336;
+.room-members {
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    padding: 15px;
 }
 
-.message.warning {
-    background-color: #ff9800;
+.room-members h3 {
+    margin-top: 0;
+    color: #202124;
+    font-size: 16px;
 }
 
-.message.info {
-    background-color: #2196F3;
+#roomMembersList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#roomMembersList li {
+    padding: 8px 0;
+    border-bottom: 1px solid #dadce0;
+}
+
+#roomMembersList li:last-child {
+    border-bottom: none;
+}
+
+.sharing-section {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+#startSharingBtn {
+    background-color: #34a853;
+    color: white;
+}
+
+#startSharingBtn:hover {
+    background-color: #2d9249;
+}
+
+#stopSharingBtn {
+    background-color: #ea4335;
+    color: white;
+}
+
+#stopSharingBtn:hover {
+    background-color: #d33426;
+}
+
+button:disabled {
+    background-color: #dadce0;
+    cursor: not-allowed;
+}
+
+.video-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.preview, .remote-screens {
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    padding: 15px;
+}
+
+.preview h3, .remote-screens h3 {
+    margin-top: 0;
+    color: #202124;
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+video {
+    width: 100%;
+    background-color: #000;
+    border-radius: 4px;
+}
+
+#remoteVideos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+#remoteVideos video {
+    aspect-ratio: 16/9;
+    object-fit: cover;
+}
+
+@media (max-width: 768px) {
+    .video-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .room-controls {
+        flex-direction: column;
+    }
+    
+    .status-container {
+        flex-direction: column;
+        align-items: center;
+    }
 } 

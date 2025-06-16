@@ -12,8 +12,25 @@ const compression = require('compression');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// Security middleware with modified CSP for WebRTC
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            mediaSrc: ["'self'", "blob:"],
+            connectSrc: ["'self'", "ws:", "wss:"],
+            frameSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: []
+        }
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
 app.use(compression());
 
 // SSL configuration
@@ -55,7 +72,7 @@ const localIP = getLocalIP();
 
 // Configure CORS for Express
 app.use(cors({
-    origin: config.corsOrigin,
+    origin: '*', // Allow all origins for development
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -67,7 +84,7 @@ app.options('*', cors());
 // Configure Socket.IO with proper CORS and transport settings
 const io = socketIo(httpsServer || httpServer, {
     cors: {
-        origin: config.corsOrigin,
+        origin: '*', // Allow all origins for development
         methods: ["GET", "POST", "OPTIONS"],
         credentials: true
     },
@@ -84,7 +101,14 @@ const io = socketIo(httpsServer || httpServer, {
 app.use(express.static(path.join(__dirname, 'public'), {
     maxAge: '1d',
     etag: true,
-    lastModified: true
+    lastModified: true,
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        } else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        }
+    }
 }));
 
 // Add basic Express route for testing
@@ -101,8 +125,9 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Store connected users
+// Store connected users and their rooms
 const users = new Map();
+const rooms = new Map();
 
 // Handle Socket.IO connection errors
 io.engine.on("connection_error", (err) => {
@@ -115,61 +140,141 @@ io.on('connect_error', (error) => {
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
-    users.set(socket.id, { id: socket.id });
+    users.set(socket.id, { 
+        id: socket.id,
+        room: null,
+        isSharing: false
+    });
     
     // Send immediate response to verify connection
     socket.emit('connection-established', { id: socket.id });
     
-    // Broadcast user list to all clients
-    io.emit('user-list', Array.from(users.values()));
-    
-    // Handle screen sharing
-    socket.on('start-sharing', () => {
-        console.log('User started sharing:', socket.id);
-        socket.broadcast.emit('user-started-sharing', socket.id);
+    // Join a room
+    socket.on('join-room', (roomId) => {
+        const user = users.get(socket.id);
+        if (user) {
+            // Leave previous room if any
+            if (user.room) {
+                socket.leave(user.room);
+                const room = rooms.get(user.room);
+                if (room) {
+                    room.delete(socket.id);
+                    if (room.size === 0) {
+                        rooms.delete(user.room);
+                    }
+                }
+            }
+            
+            // Join new room
+            socket.join(roomId);
+            user.room = roomId;
+            
+            // Initialize room if it doesn't exist
+            if (!rooms.has(roomId)) {
+                rooms.set(roomId, new Set());
+            }
+            rooms.get(roomId).add(socket.id);
+            
+            // Notify room members
+            io.to(roomId).emit('user-joined', {
+                userId: socket.id,
+                roomId: roomId
+            });
+            
+            // Send room members list
+            const roomMembers = Array.from(rooms.get(roomId)).map(id => ({
+                id,
+                isSharing: users.get(id)?.isSharing || false
+            }));
+            io.to(roomId).emit('room-members', roomMembers);
+        }
     });
     
-    socket.on('stop-sharing', () => {
-        console.log('User stopped sharing:', socket.id);
-        socket.broadcast.emit('user-stopped-sharing', socket.id);
+    // Handle screen sharing
+    socket.on('start-sharing', (data) => {
+        const user = users.get(socket.id);
+        if (user && user.room) {
+            user.isSharing = true;
+            // Create and send offer to all room members
+            io.to(user.room).emit('user-started-sharing', {
+                userId: socket.id,
+                roomId: user.room
+            });
+        }
+    });
+    
+    socket.on('stop-sharing', (data) => {
+        const user = users.get(socket.id);
+        if (user && user.room) {
+            user.isSharing = false;
+            io.to(user.room).emit('user-stopped-sharing', {
+                userId: socket.id,
+                roomId: user.room
+            });
+        }
     });
     
     // Handle WebRTC signaling
     socket.on('offer', (data) => {
-        console.log('Offer received from:', socket.id);
-        socket.broadcast.emit('offer', {
-            offer: data.offer,
-            sender: socket.id
-        });
+        const user = users.get(socket.id);
+        if (user && user.room) {
+            console.log('Offer received from:', socket.id, 'for room:', user.room);
+            // Send offer to target user
+            socket.to(data.target).emit('offer', {
+                offer: data.offer,
+                sender: socket.id,
+                roomId: user.room
+            });
+        }
     });
     
     socket.on('answer', (data) => {
-        console.log('Answer received from:', socket.id);
-        if (data.target) {
-            io.to(data.target).emit('answer', {
+        const user = users.get(socket.id);
+        if (user && user.room) {
+            console.log('Answer received from:', socket.id, 'for room:', user.room);
+            // Send answer to target user
+            socket.to(data.target).emit('answer', {
                 answer: data.answer,
-                sender: socket.id
-            });
-        } else {
-            socket.broadcast.emit('answer', {
-                answer: data.answer,
-                sender: socket.id
+                sender: socket.id,
+                roomId: user.room
             });
         }
     });
     
     socket.on('ice-candidate', (data) => {
-        console.log('ICE candidate received from:', socket.id);
-        socket.broadcast.emit('ice-candidate', {
-            candidate: data.candidate,
-            sender: socket.id
-        });
+        const user = users.get(socket.id);
+        if (user && user.room) {
+            console.log('ICE candidate received from:', socket.id, 'for room:', user.room);
+            // Send ICE candidate to target user
+            socket.to(data.target).emit('ice-candidate', {
+                candidate: data.candidate,
+                sender: socket.id,
+                roomId: user.room
+            });
+        }
     });
     
+    // Handle disconnection
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        const user = users.get(socket.id);
+        if (user && user.room) {
+            // Notify room members
+            socket.to(user.room).emit('user-left', {
+                userId: socket.id,
+                roomId: user.room
+            });
+            
+            // Remove user from room
+            const room = rooms.get(user.room);
+            if (room) {
+                room.delete(socket.id);
+                if (room.size === 0) {
+                    rooms.delete(user.room);
+                }
+            }
+        }
         users.delete(socket.id);
-        io.emit('user-list', Array.from(users.values()));
     });
 
     socket.on('error', (error) => {
