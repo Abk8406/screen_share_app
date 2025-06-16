@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: screen-show
+  labels:
+    app: screen-show
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: screen-show
+  template:
+    metadata:
+      labels:
+        app: screen-show
+    spec:
+      containers:
+      - name: screen-show
+        image: ${DOCKER_REGISTRY}/screen-show:${DOCKER_TAG}
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: screen-show-service
+spec:
+  selector:
+    app: screen-show
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer 
